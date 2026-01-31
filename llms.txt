@@ -1,0 +1,20 @@
+# Lektr KOReader Sync Plugin
+
+## Project Description
+The Lektr KOReader Sync Plugin enables seamless synchronization of highlights, notes, and reading progress from KOReader devices to a self-hosted Lektr instance. It simplifies the process of exporting reading data for active recall and knowledge management.
+
+## Key Features
+- **Auto-Sync**: Automatically syncs highlights when opening or closing a book.
+- **Manual Sync**: Creating "Sync Current Book" and "Sync All History" menu items.
+- **Authentication**: Supports email/password login and manual auth tokens.
+- **Configuration**: Easy setup via the KOReader UI.
+
+## File Structure
+- `README.md`: Documentation on features, installation, configuration, and usage.
+- `lektr.koplugin/_meta.lua`: Plugin metadata (name, version, author).
+- `lektr.koplugin/main.lua`: Core plugin logic (Lua), handling sync, HTTP requests, and UI integration.
+
+## Installation Summary
+1. Copy the `lektr.koplugin` folder to `koreader/plugins/` on the device.
+2. Restart KOReader.
+3. Configure API URL and credentials in **Search/Tools** > **Lektr Sync** > **Settings**.

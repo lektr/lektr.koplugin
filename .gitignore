@@ -1,0 +1,18 @@
+# OS junk
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Editor junk
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+
+# Lua
+*.luac
+*.lo
