@@ -58,3 +58,7 @@ On Android, accessing the data folder can be tricky due to permission restrictio
 1. Open **Lektr Sync** menu.
 2. Tap **Sync Current Book** for the active document.
 3. Tap **Sync All History** to scan and upload highlights from all your previously read books.
+
+## License
+
+This project is licensed under the [AGPL-3.0 License](LICENSE.md).
