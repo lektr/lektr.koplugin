@@ -4,7 +4,7 @@
 
 This plugin allows you to sync highlights from your KOReader device directly to your self-hosted Lektr instance.
 
-It is designed to work seamlessly with [Lektr App](https://www.lektr.app), a self-hosted eBook reader and highlight manager.
+It is designed to work seamlessly with <a href="https://www.lektr.app" target="_blank">Lektr App</a>, a self-hosted eBook reader and highlight manager.
 
 ## Features
 
