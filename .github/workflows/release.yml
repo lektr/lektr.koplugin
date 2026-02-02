@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
@@ -26,3 +25,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ./lektr.koplugin.zip
+          generate_release_notes: true
