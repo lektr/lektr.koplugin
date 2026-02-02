@@ -1,6 +1,6 @@
 # Lektr KOReader Sync Plugin
 
-[![GitHub stars](https://img.shields.io/github/stars/lektr/lektr-koreader-plugin?style=social)](https://github.com/lektr/lektr-koreader-plugin)
+[![GitHub stars](https://img.shields.io/github/stars/lektr/lektr.koplugin?style=social)](https://github.com/lektr/lektr.koplugin)
 
 This plugin allows you to sync highlights from your KOReader device directly to your self-hosted Lektr instance.
 
