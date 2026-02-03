@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
 
@@ -17,12 +18,10 @@ jobs:
 
       - name: Create Zip Package
         run: |
-          # Zip the plugin folder, excluding git and hidden files
-          cd ..
-          zip -r lektr.koplugin.zip lektr.koplugin -x '*/*.git*' '*/spec/*' '*/lua_modules/*' '*/.luarocks/*' '*/lua' '*/luarocks' '*/.tool-versions' '*/*.rockspec'
+          zip -r lektr.koplugin.zip . -x '*/*.git*' '*/spec/*' '*/lua_modules/*' '*/.luarocks/*' '*/lua' '*/luarocks' '*/.tool-versions' '*/*.rockspec' 'llms.txt' 'robots.txt'
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ./lektr.koplugin.zip
+          files: lektr.koplugin.zip
           generate_release_notes: true

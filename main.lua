@@ -19,6 +19,8 @@ local LektrSync = WidgetContainer:extend{
 
 function LektrSync:init()
     self:loadSettings()
+    -- Set timeout for http requests (5 seconds)
+    http.TIMEOUT = 5
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
     end
@@ -27,8 +29,25 @@ end
 function LektrSync:loadSettings()
     local settings_file = DataStorage:getSettingsDir() .. "/lektr_sync.lua"
     self.settings = LuaSettings:open(settings_file)
-    self.api_url = self.settings:readSetting("api_url") or "http://YOUR_SERVER_IP:3000/api/v1/import"
+    -- Default to port 3001 and clean base URL
+    local stored_url = self.settings:readSetting("api_url")
+    if stored_url then
+        -- Strip any path components if they exist in legacy settings
+        self.api_url = self:cleanUrl(stored_url)
+    else
+        self.api_url = "http://YOUR_SERVER_IP:3001"
+    end
     self.auth_token = self.settings:readSetting("auth_token") or ""
+end
+
+function LektrSync:cleanUrl(url)
+    if not url then return "" end
+    -- Remove trailing slash
+    url = url:gsub("/+$", "")
+    -- Remove common paths if user entered full URL
+    url = url:gsub("/api/v1/import$", "")
+    url = url:gsub("/api/v1$", "")
+    return url
 end
 
 function LektrSync:saveSettings()
@@ -64,7 +83,7 @@ function LektrSync:addToMainMenu(menu_items)
                         end,
                     },
                     {
-                        text = "Set API URL",
+                        text = "Set Server URL",
                         callback = function()
                             self:setApiUrl()
                         end,
@@ -77,8 +96,8 @@ function LektrSync:addToMainMenu(menu_items)
                     },
                     {
                         text = "Auto-Sync on Open/Close",
-                        checked_func = function() 
-                            return self.settings:readSetting("auto_sync") 
+                        checked_func = function()
+                            return self.settings:readSetting("auto_sync")
                         end,
                         callback = function()
                             local current = self.settings:readSetting("auto_sync") or false
@@ -136,16 +155,16 @@ function LektrSync:performBulkSync()
         text = "Starting Bulk Sync...",
         timeout = 2,
     })
-    
+
     local ReadHistory = require("readhistory")
     local DocSettings = require("docsettings")
     local history_items = ReadHistory.hist or {}
-    
+
     local count = 0
     local success = 0
     local failed = 0
     local books_data = {}
-    
+
     for _, item in ipairs(history_items) do
         local file_path = item.file
         if file_path then
@@ -154,11 +173,11 @@ function LektrSync:performBulkSync()
                 local props = doc_settings:readSetting("doc_props") or {}
                 local title = props.title or item.text or "Untitled"
                 local author = props.authors or props.author or nil
-                
+
                 local h_list = {}
-                
+
                 -- Get highlights from multiple sources
-                
+
                 -- 1. bookmarks table
                 local bookmarks = doc_settings:readSetting("bookmarks") or {}
                 for _, b in ipairs(bookmarks) do
@@ -170,7 +189,7 @@ function LektrSync:performBulkSync()
                         elseif type(b.page) == "number" then
                             page_num = b.page
                         end
-                        
+
                         table.insert(h_list, {
                             text = b.text,
                             notes = b.notes,
@@ -180,7 +199,7 @@ function LektrSync:performBulkSync()
                         })
                     end
                 end
-                
+
                 -- 2. annotations table (newer format)
                 local annotations = doc_settings:readSetting("annotations") or {}
                 for _, a in ipairs(annotations) do
@@ -191,7 +210,7 @@ function LektrSync:performBulkSync()
                         elseif type(a.page) == "number" then
                             page_num = a.page
                         end
-                        
+
                         table.insert(h_list, {
                             text = a.text,
                             notes = a.note,
@@ -201,7 +220,7 @@ function LektrSync:performBulkSync()
                         })
                     end
                 end
-                
+
                 -- 3. highlight table (page-keyed)
                 local highlight = doc_settings:readSetting("highlight") or {}
                 for page_key, page_highlights in pairs(highlight) do
@@ -214,7 +233,7 @@ function LektrSync:performBulkSync()
                                 elseif type(hl.page) == "number" then
                                     page_num = hl.page
                                 end
-                                
+
                                 table.insert(h_list, {
                                     text = hl.text,
                                     notes = hl.note,
@@ -226,7 +245,7 @@ function LektrSync:performBulkSync()
                         end
                     end
                 end
-                
+
                 if #h_list > 0 then
                     local payload = {
                         source = "koreader",
@@ -238,21 +257,20 @@ function LektrSync:performBulkSync()
                             md5sum = doc_settings:readSetting("partial_md5_checksum")
                         }
                     }
-                    
-                    local json_str = json.encode(payload)
-                    if json_str and self:sendJson(json_str) then
+
+                    if self:sendJson(payload) then
                         success = success + 1
                     else
                         failed = failed + 1
                     end
                     count = count + 1
                 end
-                
+
                 doc_settings:close()
             end
         end
     end
-    
+
     UIManager:show(InfoMessage:new{
         text = string.format("Bulk Sync Complete!\n\n%d books with highlights\n%d success, %d failed", count, success, failed),
     })
@@ -265,10 +283,10 @@ function LektrSync:uploadExportedJson()
         end)
         return
     end
-    
+
     local PathChooser = require("ui/widget/pathchooser")
     local home_dir = require("apps/filemanager/filemanagerutil").getDefaultDir()
-    
+
     local path_chooser = PathChooser:new{
         title = "Select Exported JSON File",
         path = home_dir,
@@ -292,24 +310,24 @@ function LektrSync:processExportedJson(file_path)
         })
         return
     end
-    
+
     local content = f:read("*a")
     f:close()
-    
-    local data = json.decode(content)
-    if not data then
+
+    local ok, data = pcall(json.decode, content)
+    if not ok or not data then
         UIManager:show(InfoMessage:new{
-            text = "Failed to parse JSON file",
+            text = "Failed to parse JSON file (Invalid format)",
         })
         return
     end
-    
+
     -- Handle the wrapped format from KOReader export
     local documents = data.documents or { data }
-    
+
     local success = 0
     local failed = 0
-    
+
     for _, doc in ipairs(documents) do
         local payload = {
             source = "koreader",
@@ -321,34 +339,100 @@ function LektrSync:processExportedJson(file_path)
                 file = doc.file,
             }
         }
-        
-        local json_str = json.encode(payload)
-        if json_str and self:sendJson(json_str) then
+
+        -- Pass payload table directly, sendJson handles encoding
+        if self:sendJson(payload) then
             success = success + 1
         else
             failed = failed + 1
         end
     end
-    
+
     UIManager:show(InfoMessage:new{
         text = string.format("Upload Complete!\n\n%d books uploaded\n%d success, %d failed", #documents, success, failed),
     })
 end
 
-function LektrSync:sendJson(json_body)
-    local response_body = {}
-    local res, code, headers = http.request{
-        url = self.api_url,
-        method = "POST",
-        headers = {
-            ["Content-Type"] = "application/json",
-            ["Content-Length"] = tostring(#json_body),
-            ["Cookie"] = "token=" .. (self.auth_token or "")
-        },
-        source = ltn12.source.string(json_body),
-        sink = ltn12.sink.table(response_body)
+function LektrSync:handleRequest(url, payload, method)
+    method = method or "POST"
+    local response_body_table = {}
+    local json_body = payload and json.encode(payload) or ""
+
+    local headers = {
+        ["Content-Type"] = "application/json",
+        ["Content-Length"] = tostring(#json_body),
     }
-    return code == 200 or code == 201
+
+    if self.auth_token and self.auth_token ~= "" then
+        headers["Cookie"] = "token=" .. self.auth_token
+    end
+
+    logger.info("LektrSync: Request to", url)
+
+    local source = payload and ltn12.source.string(json_body) or nil
+
+    -- Capture network errors safely
+    local res, code, response_headers = http.request{
+        url = url,
+        method = method,
+        headers = headers,
+        source = source,
+        sink = ltn12.sink.table(response_body_table)
+    }
+
+    -- 1. Network level errors (DNS, timeout, connection refused)
+    if not res then
+        local error_msg = code or "Unknown network error"
+        logger.warn("LektrSync: Network Error:", error_msg)
+        return false, "Network Error: " .. error_msg, nil
+    end
+
+    local response_body = table.concat(response_body_table)
+
+    -- 2. Attempt to parse JSON body (even for errors)
+    local decoded_body = nil
+    if response_body and response_body ~= "" then
+        local ok, data = pcall(json.decode, response_body)
+        if ok then
+            decoded_body = data
+        else
+            logger.warn("LektrSync: Failed to decode response JSON:", response_body)
+        end
+    end
+
+    -- 3. HTTP Status Check
+    if code >= 200 and code < 300 then
+        return true, decoded_body, response_headers
+    else
+        local error_msg = "Server Error (" .. tostring(code) .. ")"
+
+        if decoded_body and decoded_body.error then
+            error_msg = decoded_body.error
+        elseif decoded_body and decoded_body.message then
+            error_msg = decoded_body.message
+        elseif code == 401 then
+            error_msg = "Unauthorized: Check login or token"
+        elseif code == 404 then
+            error_msg = "Endpoint not found (404)"
+        elseif code == 500 then
+            error_msg = "Internal Server Error (500)"
+        end
+
+        logger.warn("LektrSync: HTTP Error", code, error_msg)
+        return false, error_msg, response_headers
+    end
+end
+
+function LektrSync:sendJson(payload)
+    local import_url = self.api_url .. "/api/v1/import"
+    -- Use raw payload table, handleRequest encodes it
+    local ok, res_or_err = self:handleRequest(import_url, payload, "POST")
+
+    if not ok then
+        logger.warn("LektrSync: Import failed:", res_or_err)
+    end
+
+    return ok
 end
 
 function LektrSync:login()
@@ -426,48 +510,21 @@ function LektrSync:performLogin(email, password)
         timeout = 1,
     })
 
-    -- Construct login URL from import URL
-    -- Handle various URL formats:
-    -- http://server:3000/api/v1/import -> http://server:3000/api/v1/auth/login
-    -- http://server:3000/api/v1 -> http://server:3000/api/v1/auth/login
-    -- http://server:3000 -> http://server:3000/api/v1/auth/login
-    local login_url = self.api_url
-    login_url = login_url:gsub("/import$", "")  -- Remove /import if present
-    login_url = login_url:gsub("/+$", "")        -- Remove trailing slashes
-    
-    -- If URL doesn't end with /api/v1, add it
-    if not login_url:match("/api/v1$") then
-        if login_url:match("/api$") then
-            login_url = login_url .. "/v1"
-        else
-            login_url = login_url .. "/api/v1"
-        end
-    end
-    login_url = login_url .. "/auth/login"
-    
+    -- Construct login URL from base URL
+    local login_url = self.api_url .. "/api/v1/auth/login"
+
     logger.info("LektrSync: Login URL:", login_url)
-    
+
     local payload = {
         email = email,
         password = password
     }
-    local json_body = json.encode(payload)
-    local response_body = {}
-    
-    local res, code, headers = http.request{
-        url = login_url,
-        method = "POST",
-        headers = {
-            ["Content-Type"] = "application/json",
-            ["Content-Length"] = tostring(#json_body)
-        },
-        source = ltn12.source.string(json_body),
-        sink = ltn12.sink.table(response_body)
-    }
 
-    if code == 200 or code == 201 then
+    local ok, body, headers = self:handleRequest(login_url, payload, "POST")
+
+    if ok then
         local set_cookie = headers and (headers["set-cookie"] or headers["Set-Cookie"])
-        
+
         if set_cookie then
             local token = set_cookie:match("token=([^;]+)")
             if token then
@@ -485,7 +542,7 @@ function LektrSync:performLogin(email, password)
         })
     else
         UIManager:show(InfoMessage:new{
-            text = "Login Failed: HTTP " .. tostring(code),
+            text = "Login Failed: " .. (body or "Unknown Error"),
         })
     end
 end
@@ -493,9 +550,9 @@ end
 function LektrSync:setApiUrl()
     local dialog
     dialog = InputDialog:new{
-        title = "Lektr API URL",
+        title = "Lektr Server URL",
         input = self.api_url,
-        input_hint = "http://192.168.1.100:3000/api/v1/import",
+        input_hint = "http://192.168.1.100:3001",
         buttons = {{
             {
                 text = "Cancel",
@@ -510,10 +567,10 @@ function LektrSync:setApiUrl()
                 callback = function()
                     local url = dialog:getInputText()
                     if url and url ~= "" then
-                        self.api_url = url
+                        self.api_url = self:cleanUrl(url)
                         self:saveSettings()
                         UIManager:show(InfoMessage:new{
-                            text = "API URL Saved!",
+                            text = "Server URL Saved!",
                             timeout = 2,
                         })
                     end
@@ -591,18 +648,18 @@ function LektrSync:syncCurrentBook(is_auto)
     local props = doc:getProps() or {}
     local title = props.title or "Untitled"
     local author = props.authors or props.author or "Unknown"
-    
+
     -- Get the file path for DocSettings
     local file_path = self.ui.document.file
     local DocSettings = require("docsettings")
-    
+
     -- Get highlights/bookmarks from document settings file (not in-memory)
     local h_list = {}
     local doc_settings = DocSettings:open(file_path)
-    
+
     if doc_settings then
         -- Try multiple locations where KOReader stores highlights
-        
+
         -- 1. Check "bookmarks" (includes highlights in newer KOReader)
         local bookmarks = doc_settings:readSetting("bookmarks") or {}
         logger.info("LektrSync: Found", #bookmarks, "items in bookmarks")
@@ -610,7 +667,7 @@ function LektrSync:syncCurrentBook(is_auto)
             -- KOReader 2025+: highlighted text is in "notes", "text" is user comment
             -- Older versions: might use "text" for highlighted content
             local highlight_content = b.notes or b.text or b.highlighted_text
-            
+
             if highlight_content and highlight_content ~= "" then
                 -- Debug: log what fields are available (first item only)
                 if i == 1 then
@@ -621,7 +678,7 @@ function LektrSync:syncCurrentBook(is_auto)
                     end
                     logger.info("LektrSync: Bookmark fields:", table.concat(fields, ", "))
                 end
-                
+
                 -- Try to get page number
                 local page_num = nil
                 if type(b.page) == "number" then
@@ -636,7 +693,7 @@ function LektrSync:syncCurrentBook(is_auto)
                         if ok and page then page_num = page end
                     end
                 end
-                
+
                 -- User's annotation/comment (opposite field from highlight_content)
                 local user_note = nil
                 if b.notes and b.notes ~= "" and b.notes ~= highlight_content then
@@ -647,7 +704,7 @@ function LektrSync:syncCurrentBook(is_auto)
                 elseif b.text and b.text ~= "" and b.text ~= highlight_content then
                     user_note = b.text
                 end
-                
+
                 table.insert(h_list, {
                     text = highlight_content,
                     notes = user_note,
@@ -658,7 +715,7 @@ function LektrSync:syncCurrentBook(is_auto)
                 })
             end
         end
-        
+
         -- 2. Check "annotations" (newer KOReader versions)
         local annotations = doc_settings:readSetting("annotations") or {}
         logger.info("LektrSync: Found", #annotations, "items in annotations")
@@ -675,7 +732,7 @@ function LektrSync:syncCurrentBook(is_auto)
                 })
             end
         end
-        
+
         -- 3. Check "highlight" table (page-indexed highlights)
         local highlight = doc_settings:readSetting("highlight") or {}
         local highlight_count = 0
@@ -685,7 +742,7 @@ function LektrSync:syncCurrentBook(is_auto)
                     local hl_content = hl.notes or hl.text or hl.highlighted_text
                     if hl_content and hl_content ~= "" then
                         highlight_count = highlight_count + 1
-                        
+
                         -- Try to get numeric page from multiple sources
                         local page_num = nil
                         if type(hl.page) == "number" then
@@ -701,7 +758,7 @@ function LektrSync:syncCurrentBook(is_auto)
                                 end
                             end
                         end
-                        
+
                         table.insert(h_list, {
                             text = hl_content,
                             notes = hl.note,
@@ -716,9 +773,9 @@ function LektrSync:syncCurrentBook(is_auto)
         end
         logger.info("LektrSync: Found", highlight_count, "items in highlight table")
     end
-    
+
     logger.info("LektrSync: Total highlights to sync:", #h_list)
-    
+
     local payload = {
         source = "koreader",
         data = {
@@ -727,27 +784,8 @@ function LektrSync:syncCurrentBook(is_auto)
             entries = h_list
         }
     }
-    
-    local json_body = json.encode(payload)
-    if not json_body then
-        logger.warn("LektrSync: Failed to encode JSON")
-        return
-    end
-    
-    local response_body = {}
-    local res, code, response_headers = http.request{
-        url = self.api_url,
-        method = "POST",
-        headers = {
-            ["Content-Type"] = "application/json",
-            ["Content-Length"] = tostring(#json_body),
-            ["Cookie"] = "token=" .. (self.auth_token or "")
-        },
-        source = ltn12.source.string(json_body),
-        sink = ltn12.sink.table(response_body)
-    }
 
-    if code == 200 or code == 201 then
+    if self:sendJson(payload) then
         if not is_auto then
             UIManager:show(InfoMessage:new{
                 text = "Sync Successful!",
@@ -757,10 +795,9 @@ function LektrSync:syncCurrentBook(is_auto)
     else
         if not is_auto then
             UIManager:show(InfoMessage:new{
-                text = "Sync Failed: HTTP " .. tostring(code),
+                text = "Sync Failed: Check logs for details.",
             })
         end
-        logger.warn("LektrSync Failed:", code, table.concat(response_body or {}))
     end
 end
 
