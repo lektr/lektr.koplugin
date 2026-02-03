@@ -47,7 +47,10 @@ On Android, accessing the data folder can be tricky due to permission restrictio
 ## Configuration
 
 1. Open a book in KOReader.
-2. Go to **Search/Tools** > **Lektr Sync** > **Settings**.
+2. Go to **Lektr Sync** > **Settings**.
+
+<img width="250" alt="Lektr Sync menu location" src="https://github.com/user-attachments/assets/1b35dd9f-4d1b-46cc-9c32-cf52f93a64f3" />
+
 3. Tap **Set API URL** and enter your server URL (e.g., `http://192.168.1.100:3000/api/v1/import`).
 4. Tap **Login** and enter your Lektr email and password.
    - **Auto-Sync on Open/Close**: Check this to automatically sync highlights when you open or close a book.
@@ -56,6 +59,9 @@ On Android, accessing the data folder can be tricky due to permission restrictio
 ## Usage
 
 1. Open **Lektr Sync** menu.
+
+<img width="250" alt="View of the Lektr Sync menu inside the book" src="https://github.com/user-attachments/assets/0fa858bf-b598-46b9-a89b-ec25b9f69228" />
+
 2. Tap **Sync Current Book** for the active document.
 3. Tap **Sync All History** to scan and upload highlights from all your previously read books.
 
